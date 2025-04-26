@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Monitoring Suhu dan Kelembapan</title>
+  <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    .neumorphism {
+      background: #e0e5ec;
+      box-shadow: 2px 2px 5px #a3b1c6, -8px -8px 15px #ffffff;
+    }
+    .neumorphism-inset {
+      background: #e0e5ec;
+      box-shadow: inset 2px 2px 4px #a3b1c6, inset -4px -4px 8px #ffffff;
+    }
+    .neumorphism-btn {
+      background: linear-gradient(145deg, #f0f5ff, #d1d9e6);
+      box-shadow: 5px 5px 10px #a3b1c6, -5px -5px 10px #ffffff;
+      transition: all 0.3s ease;
+    }
+    .neumorphism-btn:active {
+      box-shadow: inset 1px 1px 3px #a3b1c6, inset -3px -3px 6px #ffffff;
+    }
+    .card-hover:hover {
+      transform: translateY(-5px);
+      box-shadow: 12px 12px 20px #a3b1c6, -12px -12px 20px #ffffff;
+    }
+  </style>
+</head>
+<body class="bg-gray-100 min-h-screen font-sans">
+  <div class="container mx-auto px-4 py-8">
+    <!-- Header -->
+    <div class="neumorphism rounded-2xl p-6 mb-8 text-center">
+      <h1 class="text-3xl font-bold text-teal-500 mb-2">
+        <i class="fas fa-temperature-high mr-2"></i>
+        Monitoring Realtime
+      </h1>
+      <p class="text-gray-600">Suhu & Kelembapan Ruangan</p>
+    </div>
+
+    <!-- Sensor Cards -->
+    <div class="grid grid-cols-1 gap-6 mb-8">
+      <!-- Suhu Card -->
+      <div class="neumorphism rounded-2xl p-6 transition duration-300 card-hover">
+        <div class="flex items-center justify-between">
+          <div>
+            <h2 class="text-gray-600 font-medium mb-1">
+              <i class="fas fa-thermometer-half mr-2 text-teal-400"></i>
+              Suhu Ruangan
+            </h2>
+            <p id="suhu" class="text-4xl font-bold text-teal-500">-- °C</p>
+          </div>
+          <div class="neumorphism-inset rounded-full w-16 h-16 flex items-center justify-center">
+            <i class="fas fa-snowflake text-teal-400 text-2xl"></i>
+          </div>
+        </div>
+      </div>
+
+      <!-- Kelembapan Card -->
+      <div class="neumorphism rounded-2xl p-6 transition duration-300 card-hover">
+        <div class="flex items-center justify-between">
+          <div>
+            <h2 class="text-gray-600 font-medium mb-1">
+              <i class="fas fa-tint mr-2 text-teal-400"></i>
+              Kelembapan
+            </h2>
+            <p id="kelembapan" class="text-4xl font-bold text-teal-500">-- %</p>
+          </div>
+          <div class="neumorphism-inset rounded-full w-16 h-16 flex items-center justify-center">
+            <i class="fas fa-cloud-rain text-teal-400 text-2xl"></i>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Info Box -->
+    <div id="info" class="neumorphism rounded-2xl p-6 mb-8">
+      <div class="flex items-center mb-4">
+        <i class="fas fa-info-circle text-teal-500 mr-2 text-xl"></i>
+        <h2 class="text-xl font-semibold text-teal-500">Analisis Kondisi</h2>
+      </div>
+      <div class="text-gray-700">
+        <p>Menunggu data sensor...</p>
+      </div>
+    </div>
+
+    <!-- Connection Status -->
+    <div class="neumorphism rounded-2xl p-4 text-center">
+      <p class="text-sm text-gray-600">
+        <i class="fas fa-wifi mr-1"></i>
+        <span id="connection-status">Menghubungkan ke server...</span>
+      </p>
+    </div>
+  </div>
+
+  <script>
+    // Connect ke broker MQTT
+    const client = mqtt.connect('wss://broker.emqx.io:8084/mqtt');
+    
+    // Update connection status
+    document.getElementById('connection-status').textContent = 'Menghubungkan ke server...';
+    
+    client.on('connect', function () {
+      console.log('Connected to broker.emqx.io');
+      document.getElementById('connection-status').textContent = 'Terhubung ke server';
+      document.getElementById('connection-status').classList.add('text-teal-500');
+      
+      // Subscribe ke topik
+      client.subscribe('iot/1213121/sensor', function (err) {
+        if (!err) {
+          console.log('Subscribed to topic: iot/1213121/sensor');
+        }
+      });
+    });
+    
+    client.on('error', function (err) {
+      console.error('Connection error:', err);
+      document.getElementById('connection-status').textContent = 'Gagal terhubung ke server';
+      document.getElementById('connection-status').classList.add('text-red-500');
+    });
+    
+    client.on('message', function (topic, message) {
+      const data = message.toString();
+      console.log('Message received:', data);
+      
+      const suhuMatch = data.match(/Suhu:\s*(\d+)\s*C/);
+      const kelembapanMatch = data.match(/Kelembapan:\s*(\d+)%/);
+      
+      if (suhuMatch && kelembapanMatch) {
+        const suhu = parseInt(suhuMatch[1]);
+        const kelembapan = parseInt(kelembapanMatch[1]);
+        
+        // Update suhu display
+        const suhuElement = document.getElementById('suhu');
+        suhuElement.textContent = `${suhu} °C`;
+        
+        // Update kelembapan display
+        const kelembapanElement = document.getElementById('kelembapan');
+        kelembapanElement.textContent = `${kelembapan} %`;
+        
+        // Mulai Analisa
+        let infoText = "";
+        
+        // Suhu analysis
+        if (suhu >= 20 && suhu <= 26) {
+          infoText += `
+            <div class="mb-4 p-4 bg-teal-50 rounded-xl border-l-4 border-teal-500">
+              <div class="flex items-center mb-2">
+                <i class="fas fa-check-circle text-teal-500 mr-2"></i>
+                <h3 class="font-medium text-teal-700">Suhu Normal</h3>
+              </div>
+              <p class="text-gray-700">Suhu ${suhu}°C masih aman, dalam batas nyaman untuk kebanyakan orang, terutama di daerah tropis.</p>
+            </div>
+          `;
+        } else if (suhu > 26) {
+          infoText += `
+            <div class="mb-4 p-4 bg-orange-50 rounded-xl border-l-4 border-orange-500">
+              <div class="flex items-center mb-2">
+                <i class="fas fa-exclamation-triangle text-orange-500 mr-2"></i>
+                <h3 class="font-medium text-orange-700">Suhu Tinggi</h3>
+              </div>
+              <p class="text-gray-700">Suhu ${suhu}°C cukup panas. Disarankan menjaga hidrasi dan menghindari aktivitas berat.</p>
+            </div>
+          `;
+        } else {
+          infoText += `
+            <div class="mb-4 p-4 bg-blue-50 rounded-xl border-l-4 border-blue-500">
+              <div class="flex items-center mb-2">
+                <i class="fas fa-temperature-low text-blue-500 mr-2"></i>
+                <h3 class="font-medium text-blue-700">Suhu Rendah</h3>
+              </div>
+              <p class="text-gray-700">Suhu ${suhu}°C cukup dingin. Disarankan menggunakan pakaian hangat.</p>
+            </div>
+          `;
+        }
+        
+        // Kelembapan analysis
+        if (kelembapan >= 40 && kelembapan <= 60) {
+          infoText += `
+            <div class="mb-4 p-4 bg-teal-50 rounded-xl border-l-4 border-teal-500">
+              <div class="flex items-center mb-2">
+                <i class="fas fa-check-circle text-teal-500 mr-2"></i>
+                <h3 class="font-medium text-teal-700">Kelembapan Ideal</h3>
+              </div>
+              <p class="text-gray-700">Kelembapan ${kelembapan}% dalam kisaran ideal untuk kesehatan.</p>
+            </div>
+          `;
+        } else if (kelembapan > 60) {
+          infoText += `
+            <div class="mb-4 p-4 bg-orange-50 rounded-xl border-l-4 border-orange-500">
+              <div class="flex items-center mb-2">
+                <i class="fas fa-exclamation-triangle text-orange-500 mr-2"></i>
+                <h3 class="font-medium text-orange-700">Kelembapan Tinggi</h3>
+              </div>
+              <p class="text-gray-700 mb-2">Kelembapan ${kelembapan}% terlalu tinggi. Ini bisa menyebabkan:</p>
+              <ul class="list-disc pl-5 mb-3 text-gray-700">
+                <li class="mb-1">Tubuh sulit mendinginkan diri lewat keringat (bisa terasa gerah atau pengap)</li>
+                <li class="mb-1">Risiko tumbuhnya jamur di rumah</li>
+                <li>Memicu asma, alergi, atau infeksi pernapasan kalau terlalu lama</li>
+              </ul>
+              <div class="bg-teal-50 p-3 rounded-lg">
+                <p class="font-semibold text-teal-700 mb-1"><i class="fas fa-lightbulb mr-1"></i> Saran:</p>
+                <p class="text-gray-700">Gunakan dehumidifier atau AC dengan kontrol kelembaban. Pastikan ventilasi bagus (misal buka jendela jika memungkinkan).</p>
+              </div>
+            </div>
+          `;
+        } else {
+          infoText += `
+            <div class="mb-4 p-4 bg-blue-50 rounded-xl border-l-4 border-blue-500">
+              <div class="flex items-center mb-2">
+                <i class="fas fa-exclamation-triangle text-blue-500 mr-2"></i>
+                <h3 class="font-medium text-blue-700">Kelembapan Rendah</h3>
+              </div>
+              <p class="text-gray-700 mb-2">Kelembapan ${kelembapan}% terlalu rendah. Ini bisa menyebabkan kulit kering dan iritasi saluran pernapasan.</p>
+              <div class="bg-teal-50 p-3 rounded-lg">
+                <p class="font-semibold text-teal-700 mb-1"><i class="fas fa-lightbulb mr-1"></i> Saran:</p>
+                <p class="text-gray-700">Gunakan humidifier atau meletakkan air di dalam ruangan untuk menambah kelembapan.</p>
+              </div>
+            </div>
+          `;
+        }
+        
+        document.getElementById('info').querySelector('div.text-gray-700').innerHTML = infoText;
+      }
+    });
+  </script>
+</body>
+</html>
